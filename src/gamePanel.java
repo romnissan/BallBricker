@@ -1,4 +1,5 @@
 import java.awt.event.*;
+import java.util.LinkedList;
 import java.util.Random;
 import java.awt.*;
 import javax.swing.JPanel;
@@ -13,22 +14,28 @@ public class gamePanel extends JPanel implements Runnable {
 	static final int PADDLE_WIDTH = 160;
 	static final int BRICK_HEIGHT = 30;
 	static final int BRICK_WIDTH = 50;
-	static final int NUMBERS_OF_BRICKS = 1;
+	static final int NUMBERS_OF_BRICKS = 20;
+	static final int POWER_WIDTH = 20;
+	static final int POWER_HEIGHT = 20;
 	static boolean isWon=false;
 	static boolean start=true;
 	static boolean running=true;
+	static boolean powers=false;
+	Powers power;
 	Image image;
 	Thread thread;
 	Graphics graphics;
 	Random random;
-	Ball ball;
+	LinkedList<Ball> balls = new LinkedList<>();
 	Paddle paddle;
 	Bricks[] bricks = new Bricks[NUMBERS_OF_BRICKS];
 	Score score;
 	
 	//constructor
 	gamePanel(){
-		ball = new Ball(GAME_WIDTH/2, GAME_HEIGHT-3*PADDLE_HEIGHT-BALL_DIAMETER, BALL_DIAMETER, BALL_DIAMETER);
+		Ball ball = new Ball(GAME_WIDTH/2, GAME_HEIGHT-3*PADDLE_HEIGHT-BALL_DIAMETER, BALL_DIAMETER, BALL_DIAMETER);
+		//LinkedList<Ball> balls = new LinkedList<>();
+		balls.add(ball);
 		paddle = new Paddle(GAME_WIDTH/2, GAME_HEIGHT-3*PADDLE_HEIGHT,PADDLE_WIDTH,PADDLE_HEIGHT);
 		newBricks(bricks);
 		score = new Score(GAME_HEIGHT,GAME_WIDTH);
@@ -44,61 +51,112 @@ public class gamePanel extends JPanel implements Runnable {
 	}
 	//methods
 	public void checkCollisions() {
-		//stop paddle at the adges
+		//stop paddle at the edges
 		if(paddle.x<=0)
 			paddle.x = 0;
 		if(paddle.x>=GAME_WIDTH-PADDLE_WIDTH)
 			paddle.x = GAME_WIDTH-PADDLE_WIDTH;
+		for (Ball b : balls) {
 		//ball meet paddle
-		if(ball.y<=GAME_HEIGHT-3*PADDLE_HEIGHT) {
-			if(ball.intersects(paddle)) {
-				 ball.xVelocity = (ball.x-paddle.x-PADDLE_WIDTH/2)*(ball.speed*200/PADDLE_WIDTH)/100;
-				 ball.yVelocity = -Math.sqrt(Math.abs((ball.speed*ball.speed)-(ball.xVelocity*ball.xVelocity)));
+		if(b.y<=GAME_HEIGHT-3*PADDLE_HEIGHT) {
+			if(b.intersects(paddle)) {
+				 b.xVelocity = (b.x-paddle.x-PADDLE_WIDTH/2)*(b.speed*200/PADDLE_WIDTH)/100;
+				 b.yVelocity = -Math.sqrt(Math.abs((b.speed*b.speed)-(b.xVelocity*b.xVelocity)));
 			}
 		}
 		
-		if(ball.y>=GAME_HEIGHT) {
+		if(b.y>=GAME_HEIGHT && balls.size()==1) {
 			running = false;
 			draw(graphics);
 		}
+		else if(b.y>=GAME_HEIGHT)
+			balls.remove(b);
+		
 		//ball meet upper screen
-		if(ball.y<=0)
-			ball.yVelocity = -ball.yVelocity;
-		//ball meet sides borders
-		if(ball.x<=0)
-			ball.xVelocity = -ball.xVelocity;
-		if(ball.x>=GAME_WIDTH)
-			ball.xVelocity = -ball.xVelocity;
-		//ball meet brick
-		for (int i = 0; i < bricks.length; i++) {
-			int count = 0;
-			if(bricks[i]!=null) {
-				if(ball.intersects(bricks[i])) {
-					score.score += 15;
-					if(ball.y>=bricks[i].y+bricks[i].height/2)
-						ball.yVelocity = -ball.yVelocity;
-					else if(ball.y<=bricks[i].y-bricks[i].height/2)
-						ball.yVelocity = -ball.yVelocity;
-					else
-						ball.xVelocity = -ball.xVelocity;
-					bricks[i] = null;
+			if(b.y<=0)
+				b.yVelocity = -b.yVelocity;
+			if(power!=null && power.y<=0)
+				power.yVelocity = -power.yVelocity;
+			//ball meet sides borders
+			if(b.x<=0)
+				b.xVelocity = -b.xVelocity;
+			if(power!=null && power.x<=0)
+				power.xVelocity = -power.xVelocity;
+			if(b.x>=GAME_WIDTH)
+				b.xVelocity = -b.xVelocity;
+			if(power!=null && power.x>=GAME_WIDTH)
+				power.xVelocity = -power.xVelocity;
+			//ball meet brick
+			for (int i = 0; i < bricks.length; i++) {
+				int count = 0;
+				if(bricks[i]!=null) {
+					if(b.intersects(bricks[i])) {
+						score.score += 15;
+						if(b.y>=bricks[i].y+bricks[i].height/2)
+							b.yVelocity = -b.yVelocity;
+						else if(b.y<=bricks[i].y-bricks[i].height/2)
+							b.yVelocity = -b.yVelocity;
+						else
+							b.xVelocity = -b.xVelocity;
+						if (score.score%75 == 0) {
+							power = new Powers(bricks[i].x, bricks[i].y, POWER_WIDTH, POWER_HEIGHT);
+							powers = true;
+						}
+						bricks[i] = null;
+					}
+				}
+				else count++;
+				if(count == bricks.length) {
+					isWon = true;
+					draw(graphics);
 				}
 			}
-			else count++;
-			if(count == bricks.length) {
-				isWon = true;
-				draw(graphics);
-			}
 		}
-		
+		//paddle meet power
+		if(power!=null && power.intersects(paddle)) {
+			switch (power.id) {
+			case 0:
+				paddle.width += paddle.width + paddle.width/4;
+				break;
+			case 1:
+				for (Ball ball : balls) {
+					ball.speed = ball.speed*0.7;
+					ball.setVelocity(ball.speed);
+				}
+					break;
+			case 2:
+				Ball ball2 = new Ball(paddle.x, paddle.y, BALL_DIAMETER,BALL_DIAMETER);
+				balls.add(ball2);
+				break;
+			case 3:
+				paddle.width = paddle.width - paddle.width/4;
+				break;
+			case 4:
+				for (Ball ball : balls) {
+					ball.speed = ball.speed*1.5;
+					ball.setVelocity(ball.speed);
+				}
+					break;
+			case 5:
+				running = false;
+				break;
+			}
+			powers=false;
+			power=null;
+		}
 	}
 	
 	public void draw(Graphics g) {
 		if(isWon) youWon(g);
 		else if (running) {
 			score.draw(g);
+			if(powers)
+				power.draw(g);
 			paddle.draw(g);
-			ball.draw(g);
+			if(!balls.isEmpty())
+				for (Ball ball : balls) {
+					ball.draw(g);
+				}
 			for (int i = 0; i < bricks.length; i++) {
 				if (bricks[i]!=null)
 					bricks[i].draw(g);
@@ -110,7 +168,10 @@ public class gamePanel extends JPanel implements Runnable {
 	public void move() {
 		if(start) {
 			paddle.move();
-			ball.move();
+			for (Ball ball : balls) 
+				ball.move();
+			if(powers)
+				power.move();
 		}
 	}
 	public void paint(Graphics g) {
